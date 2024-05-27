@@ -230,114 +230,100 @@ RESTfull сервіс представляє собою базовий CRUD за
 #### Імпорти:
 
     from flask import Flask, request, jsonify
-    from flask_restful import Resource, Api
     from flask_sqlalchemy import SQLAlchemy
+    app = Flask(name)
     
     app = Flask(__name__)
     api = Api(app)
 
 #### Конфігурація бази даних MySQL:
 
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+mysqlconnector://root:D18132004_ua@localhost/quiz'
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql://root:ggwp1233z@localhost/quiz'
     db = SQLAlchemy(app)
 
-#### Створення моделі для User і Role:
 
-    class RoleModel(db.Model):
-    __tablename__ = 'Role'
+#### Створення моделі для Permission:
+
+    class Permission(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(45))
+    name = db.Column(db.String(32), nullable=False)
 
-    users = db.relationship('UserModel', backref='role')
+    def init(self, id, name):
+        self.id = id
+        self.name = name
 
-#### Модель User:
-    class UserModel(db.Model):
-    __tablename__ = 'User'
-    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    first_name = db.Column(db.String(45))
-    last_name = db.Column(db.String(45))
-    nick_name = db.Column(db.String(45), unique=True)
-    email = db.Column(db.String(128), unique=True)
-    password = db.Column(db.String(64))
-    role_id = db.Column(db.Integer, db.ForeignKey('Role.id'), nullable=False)
-
-    def to_dict(self):
-        return {
-            "id": self.id,
-            "first_name": self.first_name,
-            "last_name": self.last_name,
-            "nick_name": self.nick_name,
-            "email": self.email,
-            "password": self.password,
-            "role_id": self.role_id
-        }
 
 #### Ініціалізація бази даних:
 
-    with app.app_context():
-    db.create_all()
+    # Маршрут для отримання списку дозволів
+    @app.route('/permissions', methods=['GET'])
+    def get_permissions():
+    permissions = Permission.query.all()
+    # Формуємо список словників, щоб передати у форматі JSON
+    result = [{'id': permission.id, 'name': permission.name} for permission in permissions]
+    return jsonify(result)
     
-    class User(Resource):
-    def get(self, user_id=None):
-    if user_id is None:
-    users = UserModel.query.all()
-    return [user.to_dict() for user in users]
-    else:
-    user = UserModel.query.get(user_id)
-    if user:
-    return user.to_dict()
-    return {'message': 'User not found'}, 404
-
-    def post(self):
-        data = request.get_json()
-        existing_user_email = UserModel.query.filter_by(email=data.get('email')).first()
-        existing_user_nick = UserModel.query.filter_by(nick_name=data.get('nick_name')).first()
-        if existing_user_email is not None:
-            return {'message': 'User with this email already exists'}, 400
-        if existing_user_nick is not None:
-            return {'message': 'User with this nickname already exists'}, 400
-        new_user = UserModel(
-            first_name=data.get('first_name'),
-            last_name=data.get('last_name'),
-            nick_name=data.get('nick_name'),
-            email=data.get('email'),
-            password=data.get('password'),
-            role_id=data.get('role_id')
-        )
-        db.session.add(new_user)
+    # Маршрут для створення нового дозволу
+    @app.route('/permissions', methods=['POST'])
+    def create_permission():
+    data = request.get_json()
+    id = data.get('id')
+    name = data.get('name')
+    
+        if not id or not name:
+            return jsonify({'error': 'Ідентифікатор та ім`я обов`язкові'}), 400
+    
+        existing_permission = Permission.query.filter_by(id=id).first()
+        if existing_permission:
+            return jsonify({'error': f'Дозвіл з ідентифікатором {id} вже існує'}), 409
+    
+        existing_permission = Permission.query.filter_by(name=name).first()
+        if existing_permission:
+            return jsonify({'error': f'Дозвіл з іменем {name} вже існує'}), 409
+    
+        new_permission = Permission(id=id, name=name)
+        db.session.add(new_permission)
         db.session.commit()
-        return {'message': 'User created successfully', 'user': new_user.to_dict()}, 201
-
-    def put(self, user_id):
-        user = UserModel.query.get(user_id)
-        if user:
-            data = request.get_json()
-            user.first_name = data.get('first_name', user.first_name)
-            user.last_name = data.get('last_name', user.last_name)
-            user.nick_name = data.get('nick_name', user.nick_name)
-            user.email = data.get('email', user.email)
-            user.password = data.get('password', user.password)
-            user.role_id = data.get('role_id', user.role_id)
-            db.session.commit()
-            return {'message': 'User updated successfully', 'user': user.to_dict()}
-        return {'message': 'User not found'}, 404
-
-    def delete(self, user_id):
-        user = UserModel.query.get(user_id)
-        if user:
-            db.session.delete(user)
-            db.session.commit()
-            return {'message': 'User deleted successfully'}, 200
-        return {'message': 'User not found'}, 404
-
-    api.add_resource(User, '/users', '/users/<int:user_id>')
     
-    @app.route('/')
-    def index():
-    return "Welcome to the User API"
+        return jsonify({'message': f'Дозвіл з ідентифікатором {id} та іменем {name} створений успішно'}), 201
     
-    if __name__ == '__main__':
+    # Маршрут для оновлення існуючого дозволу
+    @app.route('/permissions/<int:id>', methods=['PUT'])
+    def update_permission(id):
+    permission = Permission.query.get(id)
+    
+        if not permission:
+            return jsonify({'error': f'Дозвіл з ідентифікатором {id} не знайдений'}), 404
+    
+        data = request.get_json()
+        name = data.get('name')
+    
+        if not name:
+            return jsonify({'error': 'Ім`я обов`язкове'}), 400
+    
+        existing_permission = Permission.query.filter(Permission.name == name, Permission.id != id).first()
+        if existing_permission:
+            return jsonify({'error': f'Дозвіл з іменем {name} вже існує'}), 409
+    
+        permission.name = name
+        db.session.commit()
+    
+        return jsonify({'message': f'Дозвіл з ідентифікатором {id} оновлений успішно, нове ім`я - {name}'})
+    
+    # Маршрут для видалення дозволу за ідентифікатором
+    @app.route('/permissions/<int:id>', methods=['DELETE'])
+    def delete_permission(id):
+    permission = Permission.query.get(id)
+    
+        if not permission:
+            return jsonify({'error': f'Дозвіл з ідентифікатором {id} не знайдений'}), 404
+        permission_name = permission.name
+    
+        db.session.delete(permission)
+        db.session.commit()
+        return jsonify({'message': f'Дозвіл з ідентифікатором {id} та іменем {permission_name} видалений успішно'})
+    
+    if name == 'main':
     app.run(debug=True)
 
 
