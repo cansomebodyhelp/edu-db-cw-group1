@@ -4,7 +4,7 @@
   "main": "index.js",
   "description": "Databases course work template",
   "repository": "https://github.com/Daniil-Dyachenko/edu-db-cw-group1",
-  "author": "Daniil Dyachenko <daniil.dyachenko.2018@gmail.com>",
+  "author": "Ermakov Bohdan <zumikyt@gmail.com>",
   "license": "ECL 2.0",
   "scripts": {
     "docs:dev": "npx vuepress dev docs",
